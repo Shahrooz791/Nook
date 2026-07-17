@@ -46,7 +46,7 @@ class SplashScreen extends StatelessWidget {
                     duration: 600.ms,
                   ),
               Gap.v(56),
-              _LoadingBar(),
+              const _LoadingBar(),
             ],
           ),
         ),
@@ -64,8 +64,8 @@ class _GlowingLogo extends StatelessWidget {
       alignment: Alignment.center,
       children: [
         Container(
-          width: 130.h,
-          height: 130.h,
+          width: 140.h,
+          height: 140.h,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: RadialGradient(
@@ -84,10 +84,12 @@ class _GlowingLogo extends StatelessWidget {
               curve: Curves.easeInOut,
             )
             .fadeIn(duration: 600.ms),
+        // Use the full logo.png from assets
         Image.asset(
           ImagesAssets.logo,
-          width: 72.h,
-          height: 72.h,
+          width: 88.h,
+          height: 88.h,
+          fit: BoxFit.contain,
         ).animate().scale(
               begin: const Offset(0.7, 0.7),
               end: const Offset(1, 1),
@@ -99,32 +101,73 @@ class _GlowingLogo extends StatelessWidget {
   }
 }
 
-class _LoadingBar extends StatelessWidget {
+/// A progress bar that animates from 0 → full width smoothly over the splash
+/// duration (1700 ms, starting 500 ms after fadeIn so total is ~2200 ms),
+/// then holds at full. No looping — it completes exactly once.
+class _LoadingBar extends StatefulWidget {
   const _LoadingBar();
 
   @override
+  State<_LoadingBar> createState() => _LoadingBarState();
+}
+
+class _LoadingBarState extends State<_LoadingBar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _progress;
+
+  @override
+  void initState() {
+    super.initState();
+    // Total splash = 2200ms. Bar fades in at ~900ms, then fills over 1100ms
+    // so it completes just as navigation fires.
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1150),
+    );
+    _progress = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
+
+    // Start after the fade-in delay (900 ms) + a small buffer
+    Future.delayed(const Duration(milliseconds: 950), () {
+      if (mounted) _ctrl.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 60.h,
+    final barWidth = 160.h;
+    return SizedBox(
+      width: barWidth,
       height: 3.v,
-      decoration: BoxDecoration(
-        color: AppColors.glassFillStrong,
-        borderRadius: 100.r,
-      ),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Container(
-          width: 24.h,
-          height: 3.v,
-          decoration: BoxDecoration(
-            gradient: AppColors.accentGradient,
-            borderRadius: 100.r,
-          ),
-        )
-            .animate(onPlay: (c) => c.repeat())
-            .moveX(begin: 0, end: 36.h, duration: 900.ms, curve: Curves.easeInOut)
-            .then()
-            .moveX(begin: 36.h, end: 0, duration: 900.ms, curve: Curves.easeInOut),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.glassFillStrong,
+          borderRadius: 100.r,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: AnimatedBuilder(
+          animation: _progress,
+          builder: (context, _) {
+            return Align(
+              alignment: Alignment.centerLeft,
+              child: FractionallySizedBox(
+                widthFactor: _progress.value,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: AppColors.accentGradient,
+                    borderRadius: 100.r,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
       ),
     ).animate().fadeIn(delay: 900.ms, duration: 500.ms);
   }

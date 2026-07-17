@@ -69,6 +69,7 @@ class ViewLetterScreen extends StatelessWidget {
                               onDelete: () => showDeleteLetterDialog(
                                 onConfirm: controller.deleteLetter,
                               ),
+                              onEdit: controller.editLetter,
                             ),
                           ],
                         ),

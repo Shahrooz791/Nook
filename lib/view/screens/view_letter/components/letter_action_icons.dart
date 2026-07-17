@@ -3,24 +3,29 @@ import 'package:nook/core/constant/app_colors.dart';
 import 'package:nook/core/utils/size_utils.dart';
 import 'package:nook/view/widgets/app_text.dart';
 
-/// Share is a disabled no-op for this phase — Delete is the only live action.
+/// Edit and Delete actions shown at the bottom of an unlocked letter.
 class LetterActionIcons extends StatelessWidget {
-  const LetterActionIcons({super.key, required this.onDelete});
+  const LetterActionIcons({
+    super.key,
+    required this.onDelete,
+    required this.onEdit,
+  });
 
   final VoidCallback onDelete;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        Opacity(
-          opacity: 0.4,
+        GestureDetector(
+          onTap: onEdit,
           child: Row(
             children: [
-              Icon(Icons.ios_share_rounded, size: 16.h, color: AppColors.textLo),
+              Icon(Icons.edit_outlined, size: 16.h, color: AppColors.accent),
               Gap.h(6),
-              const AppText('Share', size: 12.5, color: AppColors.textLo),
+              const AppText('Edit', size: 12.5, color: AppColors.accent),
             ],
           ),
         ),

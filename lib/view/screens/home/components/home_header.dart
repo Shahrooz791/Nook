@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:nook/core/constant/app_colors.dart';
 import 'package:nook/core/utils/size_utils.dart';
-import 'package:nook/view/widgets/app_text.dart';
+import 'package:nook/core/constant/app_fonts.dart';
 
 /// Just the wordmark — no greeting, no date, no avatar, no app bar.
 class HomeHeader extends StatelessWidget {
@@ -10,14 +10,24 @@ class HomeHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 10.v),
-      child: const AppText(
-        'Nook',
-        isSerif: true,
-        size: 18,
-        weight: FontWeight.w500,
-        color: AppColors.textHi,
+      padding: EdgeInsets.only(top: 16.v, bottom: 12.v),
+      child: ShaderMask(
+        shaderCallback: (bounds) => AppColors.accentGradient.createShader(
+          Rect.fromLTWH(0, 0, bounds.width, bounds.height),
+        ),
+        blendMode: BlendMode.srcIn,
+        child: Text(
+          'Nook',
+          style: TextStyle(
+            fontFamily: AppFonts.serif,
+            fontSize: 32.fSize,
+            fontWeight: FontWeight.w700,
+            color: Colors.white, // replaced by shader
+            letterSpacing: -0.5,
+          ),
+        ),
       ),
     );
   }
 }
+

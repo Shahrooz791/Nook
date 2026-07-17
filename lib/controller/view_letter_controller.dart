@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:nook/core/utils/routes.dart';
 import 'package:nook/local_data/letters_local_data.dart';
 import 'package:nook/model/letter_model.dart';
 
@@ -31,4 +32,16 @@ class ViewLetterController extends GetxController {
     await LettersLocalData.instance.deleteLetter(current!.id!);
     Get.back();
   }
+
+  /// Opens the edit screen. When user saves and comes back, re-loads the letter.
+  Future<void> editLetter() async {
+    final current = letter.value;
+    if (current == null) return;
+    await Get.toNamed(AppRoutes.editLetter, arguments: current);
+    // Refresh after returning from edit screen
+    if (current.id != null) {
+      await _loadLetter(current.id!);
+    }
+  }
 }
+

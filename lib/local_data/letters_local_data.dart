@@ -57,4 +57,15 @@ class LettersLocalData {
     final db = await _database;
     await db.delete('letters', where: 'id = ?', whereArgs: [id]);
   }
+
+  Future<void> updateLetter(LetterModel letter) async {
+    if (letter.id == null) return;
+    final db = await _database;
+    await db.update(
+      'letters',
+      letter.toMap(),
+      where: 'id = ?',
+      whereArgs: [letter.id],
+    );
+  }
 }
