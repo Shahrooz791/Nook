@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 
+import 'package:nook/core/constant/app_colors.dart';
 import 'package:nook/local_data/vault_local_data.dart';
 import 'package:nook/model/vault_models.dart';
 
@@ -12,8 +14,6 @@ class VaultPhotosController extends GetxController {
   final RxSet<int> selectedIds = <int>{}.obs;
   final RxBool isMultiSelect = false.obs;
   final RxBool isImporting = false.obs;
-
-  final _picker = ImagePicker();
 
   @override
   void onInit() {
@@ -29,12 +29,31 @@ class VaultPhotosController extends GetxController {
   // ── Import ────────────────────────────────────────────────────────────────
 
   Future<void> importPhotos() async {
-    final picked = await _picker.pickMultiImage(imageQuality: 90);
-    if (picked.isEmpty) return;
+    final List<AssetEntity>? picked = await AssetPicker.pickAssets(
+      Get.context!,
+      pickerConfig: AssetPickerConfig(
+        maxAssets: 80,
+        requestType: RequestType.image,
+        pickerTheme: AssetPicker.themeData(AppColors.vaultAccent).copyWith(
+          scaffoldBackgroundColor: AppColors.vaultBgA,
+          appBarTheme: const AppBarTheme(
+            backgroundColor: AppColors.vaultBgB,
+            elevation: 0,
+          ),
+        ),
+      ),
+    );
+    if (picked == null || picked.isEmpty) return;
     isImporting.value = true;
-    for (final xf in picked) {
-      final bytes = await xf.readAsBytes();
-      await VaultLocalData.instance.insertPhoto(bytes, originalPath: xf.path);
+    for (final asset in picked) {
+      final bytes = await asset.originBytes;
+      if (bytes == null) continue;
+      final file = await asset.file;
+      await VaultLocalData.instance.insertPhoto(
+        bytes,
+        originalPath: file?.path,
+        assetId: asset.id,
+      );
     }
     await loadPhotos();
     isImporting.value = false;

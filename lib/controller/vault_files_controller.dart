@@ -28,15 +28,8 @@ class VaultFilesController extends GetxController {
     await VaultLocalData.instance.insertFile(
       pf.bytes!,
       originalName: pf.name,
+      originalPath: pf.path,
     );
-
-    // Attempt to hide
-    if (pf.path != null) {
-      try {
-        final f = File(pf.path!);
-        if (await f.exists()) await f.delete();
-      } catch (_) {}
-    }
 
     await loadFiles();
     isImporting.value = false;

@@ -114,9 +114,17 @@ class VaultLocalData {
   }
 
   /// Encrypts [imageBytes], writes an `.enc` file, inserts metadata row.
-  Future<VaultPhoto> insertPhoto(Uint8List imageBytes, {String? originalPath}) async {
+  Future<VaultPhoto> insertPhoto(Uint8List imageBytes, {String? originalPath, String? assetId}) async {
     final encrypted = await VaultEncryption.instance.encrypt(imageBytes);
     final path = await _writeEncFile(encrypted, 'photos');
+    
+    // Verify the encrypted file was written successfully (exists, non-zero size)
+    final encFile = File(path);
+    final isSaved = await encFile.exists() && (await encFile.length()) > 0;
+    if (!isSaved) {
+      throw Exception('Failed to verify encrypted file storage.');
+    }
+
     final photo = VaultPhoto(
       encryptedPath: path,
       originalPath: originalPath,
@@ -126,9 +134,9 @@ class VaultLocalData {
     final id = await db.insert('vault_photos', photo.toMap());
     
     // Gallery Deletion Logic
-    if (originalPath != null) {
+    if (assetId != null) {
       try {
-        final List<String> deleted = await PhotoManager.editor.deleteWithIds([originalPath]);
+        final List<String> deleted = await PhotoManager.editor.deleteWithIds([assetId]);
         if (deleted.isEmpty) {
           Get.snackbar(
             'Notice',
@@ -175,9 +183,18 @@ class VaultLocalData {
     Uint8List videoBytes, {
     String? originalPath,
     int durationSeconds = 0,
+    String? assetId,
   }) async {
     final encrypted = await VaultEncryption.instance.encrypt(videoBytes);
     final path = await _writeEncFile(encrypted, 'videos');
+    
+    // Verify the encrypted file was written successfully (exists, non-zero size)
+    final encFile = File(path);
+    final isSaved = await encFile.exists() && (await encFile.length()) > 0;
+    if (!isSaved) {
+      throw Exception('Failed to verify encrypted file storage.');
+    }
+
     final video = VaultVideo(
       encryptedPath: path,
       originalPath: originalPath,
@@ -187,16 +204,29 @@ class VaultLocalData {
     final db = await _database;
     final id = await db.insert('vault_videos', video.toMap());
     
-    // Gallery Deletion Logic
-    if (originalPath != null) {
+    // Gallery/File Deletion Logic
+    if (assetId != null) {
       try {
-        final List<String> deleted = await PhotoManager.editor.deleteWithIds([originalPath]);
+        final List<String> deleted = await PhotoManager.editor.deleteWithIds([assetId]);
         if (deleted.isEmpty) {
           Get.snackbar(
             'Notice',
             'Saved to vault, but couldn\'t remove the original.',
             snackPosition: SnackPosition.BOTTOM,
           );
+        }
+      } catch (e) {
+        Get.snackbar(
+          'Notice',
+          'Saved to vault, but couldn\'t remove the original.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+    } else if (originalPath != null) {
+      try {
+        final f = File(originalPath);
+        if (await f.exists()) {
+          await f.delete();
         }
       } catch (e) {
         Get.snackbar(
@@ -242,9 +272,18 @@ class VaultLocalData {
   Future<VaultFile> insertFile(
     Uint8List fileBytes, {
     required String originalName,
+    String? originalPath,
   }) async {
     final encrypted = await VaultEncryption.instance.encrypt(fileBytes);
     final path = await _writeEncFile(encrypted, 'files');
+    
+    // Verify the encrypted file was written successfully (exists, non-zero size)
+    final encFile = File(path);
+    final isSaved = await encFile.exists() && (await encFile.length()) > 0;
+    if (!isSaved) {
+      throw Exception('Failed to verify encrypted file storage.');
+    }
+
     final vf = VaultFile(
       originalName: originalName,
       encryptedPath: path,
@@ -253,6 +292,23 @@ class VaultLocalData {
     );
     final db = await _database;
     final id = await db.insert('vault_files', vf.toMap());
+
+    // Try to delete the original file if path is provided
+    if (originalPath != null) {
+      try {
+        final f = File(originalPath);
+        if (await f.exists()) {
+          f.deleteSync();
+        }
+      } catch (e) {
+        Get.snackbar(
+          'Notice',
+          'Saved to vault, but couldn\'t remove the original.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+    }
+
     return VaultFile(
       id: id,
       originalName: originalName,

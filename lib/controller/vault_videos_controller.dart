@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
 
@@ -18,8 +18,6 @@ class VaultVideosController extends GetxController {
   final RxSet<int> selectedIds = <int>{}.obs;
   final RxBool isMultiSelect = false.obs;
   final RxBool isImporting = false.obs;
-
-  final _picker = ImagePicker();
 
   @override
   void onInit() {
@@ -41,12 +39,30 @@ class VaultVideosController extends GetxController {
     Uint8List? videoBytes;
     int durationSeconds = 0;
     File? tempFile;
+    String? assetId;
 
     if (source == 'gallery') {
-      final picked = await _picker.pickVideo(source: ImageSource.gallery);
-      if (picked == null) return;
-      videoBytes = await picked.readAsBytes();
-      tempFile = File(picked.path);
+      final List<AssetEntity>? picked = await AssetPicker.pickAssets(
+        Get.context!,
+        pickerConfig: AssetPickerConfig(
+          maxAssets: 1,
+          requestType: RequestType.video,
+          pickerTheme: AssetPicker.themeData(AppColors.vaultAccent).copyWith(
+            scaffoldBackgroundColor: AppColors.vaultBgA,
+            appBarTheme: const AppBarTheme(
+              backgroundColor: AppColors.vaultBgB,
+              elevation: 0,
+            ),
+          ),
+        ),
+      );
+      if (picked == null || picked.isEmpty) return;
+      final asset = picked.first;
+      videoBytes = await asset.originBytes;
+      if (videoBytes == null) return;
+      tempFile = await asset.file;
+      durationSeconds = asset.duration;
+      assetId = asset.id;
     } else {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.video,
@@ -55,23 +71,24 @@ class VaultVideosController extends GetxController {
       if (result == null || result.files.single.path == null) return;
       tempFile = File(result.files.single.path!);
       videoBytes = await tempFile.readAsBytes();
-    }
 
-    // Extract duration via VideoPlayerController
-    try {
-      final vpc = VideoPlayerController.file(tempFile);
-      await vpc.initialize();
-      durationSeconds = vpc.value.duration.inSeconds;
-      await vpc.dispose();
-    } catch (_) {
-      durationSeconds = 0;
+      // Extract duration via VideoPlayerController
+      try {
+        final vpc = VideoPlayerController.file(tempFile);
+        await vpc.initialize();
+        durationSeconds = vpc.value.duration.inSeconds;
+        await vpc.dispose();
+      } catch (_) {
+        durationSeconds = 0;
+      }
     }
 
     isImporting.value = true;
     await VaultLocalData.instance.insertVideo(
       videoBytes,
-      originalPath: tempFile.path,
+      originalPath: tempFile?.path,
       durationSeconds: durationSeconds,
+      assetId: assetId,
     );
 
     await loadVideos();
