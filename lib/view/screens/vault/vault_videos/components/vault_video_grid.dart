@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:nook/controller/vault_videos_controller.dart';
@@ -33,7 +34,10 @@ class VaultVideoGrid extends StatelessWidget {
               if (controller.isMultiSelect.value) {
                 controller.toggleMultiSelect(video.id!);
               } else {
-                Get.to(() => VaultVideoPlayerScreen(video: video));
+                Get.to(() => VaultVideoPlayerScreen(
+                      videos: controller.videos,
+                      initialIndex: index,
+                    ));
               }
             },
             onLongPress: () {
@@ -56,38 +60,67 @@ class VaultVideoGrid extends StatelessWidget {
                         ),
                         borderRadius: 18.r,
                       ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.play_circle_outline,
-                            size: 48.adaptSize,
-                            color: AppColors.vaultAccent,
-                          ),
-                          Gap.v(12),
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 10.h,
-                              vertical: 4.v,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.vaultBgA.withValues(alpha: 0.6),
-                              borderRadius: 20.r,
-                            ),
-                            child: AppText(
-                              video.durationDisplay,
-                              color: AppColors.vaultTextHi,
-                              size: 12,
-                              weight: FontWeight.w600,
-                            ),
-                          ),
-                          Gap.v(6),
-                          AppText(
-                            'Video #${index + 1}',
-                            color: AppColors.vaultTextLo,
-                            size: 11,
-                          ),
-                        ],
+                      clipBehavior: Clip.antiAlias,
+                      child: FutureBuilder<Uint8List?>(
+                        future: controller.decryptVideoThumb(video),
+                        builder: (context, snapshot) {
+                          final thumbData = snapshot.data;
+                          return Stack(
+                            children: [
+                              if (thumbData != null)
+                                Positioned.fill(
+                                  child: Image.memory(
+                                    thumbData,
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 320,
+                                  ),
+                                ),
+                              if (thumbData != null)
+                                Positioned.fill(
+                                  child: Container(
+                                    color: Colors.black.withValues(alpha: 0.35),
+                                  ),
+                                ),
+                              Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.play_circle_outline,
+                                      size: 48.adaptSize,
+                                      color: AppColors.vaultAccent,
+                                    ),
+                                    Gap.v(12),
+                                    Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 10.h,
+                                        vertical: 4.v,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.vaultBgA.withValues(alpha: 0.6),
+                                        borderRadius: 20.r,
+                                      ),
+                                      child: AppText(
+                                        video.durationDisplay,
+                                        color: AppColors.vaultTextHi,
+                                        size: 12,
+                                        weight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    if (thumbData == null) ...[
+                                      Gap.v(6),
+                                      AppText(
+                                        'Video #${index + 1}',
+                                        color: AppColors.vaultTextLo,
+                                        size: 11,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
                   ),

@@ -79,107 +79,102 @@ class _VaultPasswordFormState extends State<VaultPasswordForm> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: GlassContainer(
-        isVault: true,
-        radius: 24,
-        padding: EdgeInsets.all(24.h),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  AppText(
-                    widget.passwordEntry == null ? 'Add Password' : 'Edit Password',
-                    size: 18,
-                    weight: FontWeight.w600,
-                    color: AppColors.vaultTextHi,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: AppColors.vaultTextLo),
-                    onPressed: () => Get.back(),
-                  ),
-                ],
-              ),
-              Gap.v(16),
+    return GlassContainer(
+      isVault: true,
+      radius: 24,
+      padding: EdgeInsets.all(24.h),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                AppText(
+                  widget.passwordEntry == null ? 'Add Password' : 'Edit Password',
+                  size: 18,
+                  weight: FontWeight.w600,
+                  color: AppColors.vaultTextHi,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: AppColors.vaultTextLo),
+                  onPressed: () => Get.back(),
+                ),
+              ],
+            ),
+            Gap.v(16),
 
-              // Title Field
-              _buildField('Title / App Name', _titleController, 'e.g. Spotify'),
-              Gap.v(12),
+            // Title Field
+            _buildField('Title / App Name', _titleController, 'e.g. Spotify'),
+            Gap.v(12),
 
-              // Username Field
-              _buildField('Username / Email', _usernameController, 'e.g. user@email.com'),
-              Gap.v(12),
+            // Username Field
+            _buildField('Username / Email', _usernameController, 'e.g. user@email.com'),
+            Gap.v(12),
 
-              // Password Field
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const AppText('Password', size: 12, color: AppColors.vaultTextLo),
-                  Gap.v(6),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    style: const TextStyle(color: AppColors.vaultTextHi),
-                    decoration: InputDecoration(
-                      hintText: 'Enter password',
-                      hintStyle: TextStyle(color: AppColors.vaultTextLo.withValues(alpha: 0.5)),
-                      filled: true,
-                      fillColor: AppColors.vaultGlassFill,
-                      border: OutlineInputBorder(
-                        borderRadius: 12.r,
-                        borderSide: BorderSide(color: AppColors.vaultGlassBorder),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: 12.r,
-                        borderSide: BorderSide(color: AppColors.vaultGlassBorder),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: 12.r,
-                        borderSide: const BorderSide(color: AppColors.vaultAccent),
-                      ),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 14.h, vertical: 14.v),
-                      suffixIcon: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: Icon(
-                              _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                              color: AppColors.vaultTextLo,
-                            ),
-                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+            // Password Field
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const AppText('Password', size: 12, color: AppColors.vaultTextLo),
+                Gap.v(6),
+                TextField(
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  style: const TextStyle(color: AppColors.vaultTextHi),
+                  decoration: InputDecoration(
+                    hintText: 'Enter password',
+                    hintStyle: TextStyle(color: AppColors.vaultTextLo.withValues(alpha: 0.5)),
+                    filled: true,
+                    fillColor: AppColors.vaultGlassFill,
+                    border: OutlineInputBorder(
+                      borderRadius: 12.r,
+                      borderSide: BorderSide(color: AppColors.vaultGlassBorder),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: 12.r,
+                      borderSide: BorderSide(color: AppColors.vaultGlassBorder),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: 12.r,
+                      borderSide: const BorderSide(color: AppColors.vaultAccent),
+                    ),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 14.h, vertical: 14.v),
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                            color: AppColors.vaultTextLo,
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.vpn_key_outlined, color: AppColors.vaultAccent),
-                            onPressed: _generatePassword,
-                            tooltip: 'Generate Password',
-                          ),
-                        ],
-                      ),
+                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.vpn_key_outlined, color: AppColors.vaultAccent),
+                          onPressed: _generatePassword,
+                          tooltip: 'Generate Password',
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-              Gap.v(12),
+                ),
+              ],
+            ),
+            Gap.v(12),
 
-              // Notes Field
-              _buildField('Notes (Optional)', _notesController, 'Add details...', maxLines: 3),
-              Gap.v(24),
+            // Notes Field
+            _buildField('Notes (Optional)', _notesController, 'Add details...', maxLines: 3),
+            Gap.v(24),
 
-              PrimaryButton(
-                label: 'Save Password',
-                isVault: true,
-                onTap: _save,
-              ),
-              Gap.v(8),
-            ],
-          ),
+            PrimaryButton(
+              label: 'Save Password',
+              isVault: true,
+              onTap: _save,
+            ),
+            Gap.v(8),
+          ],
         ),
       ),
     );

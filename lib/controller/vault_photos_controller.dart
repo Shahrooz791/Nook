@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 
@@ -59,7 +60,7 @@ class VaultPhotosController extends GetxController {
     isImporting.value = false;
   }
 
-  // ── Decrypt for display (just-in-time, never written to disk) ─────────────
+  // ── Decrypt for display ───────────────────────────────────────────────────
 
   Future<Uint8List> decryptPhotoBytes(VaultPhoto photo) =>
       VaultLocalData.instance.decryptPhoto(photo);
@@ -91,26 +92,90 @@ class VaultPhotosController extends GetxController {
     await loadPhotos();
   }
 
+  // ── Restore ───────────────────────────────────────────────────────────────
+
+  Future<bool> restorePhoto(VaultPhoto photo) async {
+    try {
+      final bytes = await VaultLocalData.instance.decryptPhoto(photo);
+      final filename = 'restored_photo_${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+      AssetEntity? savedAsset;
+      try {
+        savedAsset = await PhotoManager.editor.saveImage(
+          bytes,
+          title: filename,
+          filename: filename,
+          relativePath: 'Pictures/NookRestored',
+        );
+      } catch (e) {
+        debugPrint('[Nook][vault] PhotoManager saveImage error: $e');
+      }
+
+      if (savedAsset != null) {
+        await VaultLocalData.instance.deletePhoto(photo.id!);
+        await loadPhotos();
+        Get.snackbar(
+          'Restored',
+          'Photo saved to Gallery (Pictures/NookRestored)',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: AppColors.vaultGlassFillStrong,
+          colorText: AppColors.vaultTextHi,
+        );
+        return true;
+      }
+
+      // Fallback: direct file write + MediaScanner scan
+      if (Platform.isAndroid) {
+        final restoreDir = Directory('/storage/emulated/0/Download/NookRestored');
+        if (!await restoreDir.exists()) {
+          await restoreDir.create(recursive: true);
+        }
+        final targetFile = File('${restoreDir.path}/$filename');
+        await targetFile.writeAsBytes(bytes);
+        if (await targetFile.exists() && await targetFile.length() > 0) {
+          try {
+            await const MethodChannel('nook/media_scanner').invokeMethod('scanFile', {'path': targetFile.path});
+          } catch (_) {}
+          await VaultLocalData.instance.deletePhoto(photo.id!);
+          await loadPhotos();
+          Get.snackbar(
+            'Restored',
+            'Photo saved to Downloads/NookRestored',
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: AppColors.vaultGlassFillStrong,
+            colorText: AppColors.vaultTextHi,
+          );
+          return true;
+        }
+      }
+
+      Get.snackbar(
+        'Error',
+        'Could not restore photo — please try again',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.vaultDanger.withValues(alpha: 0.8),
+        colorText: AppColors.vaultTextHi,
+      );
+      return false;
+    } catch (e) {
+      debugPrint('[Nook][vault] restorePhoto error: $e');
+      Get.snackbar(
+        'Error',
+        'Could not restore photo — please try again',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.vaultDanger.withValues(alpha: 0.8),
+        colorText: AppColors.vaultTextHi,
+      );
+      return false;
+    }
+  }
+
   Future<void> restoreSelected() async {
     final toRestoreIds = List<int>.from(selectedIds);
     for (final id in toRestoreIds) {
       final photo = photos.firstWhereOrNull((p) => p.id == id);
       if (photo == null) continue;
-      
-      final bytes = await VaultLocalData.instance.decryptPhoto(photo);
-      
-      // Determine restore directory
-      final restoreDir = Directory('/storage/emulated/0/Download/NookRestored');
-      if (!await restoreDir.exists()) {
-        await restoreDir.create(recursive: true);
-      }
-      
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final restorePath = '${restoreDir.path}/restored_photo_$timestamp.jpg';
-      await File(restorePath).writeAsBytes(bytes);
-
-      // Now remove from vault
-      await VaultLocalData.instance.deletePhoto(id);
+      await restorePhoto(photo);
     }
     selectedIds.clear();
     isMultiSelect.value = false;

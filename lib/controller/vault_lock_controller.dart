@@ -3,11 +3,21 @@ import 'package:nook/core/utils/routes.dart';
 import 'package:nook/local_data/vault_encryption.dart';
 import 'package:nook/local_data/vault_local_data.dart';
 
-enum VaultLockMode { checkingPin, firstSetup, confirmSetup, unlock }
+import 'package:nook/local_data/vault_media_cache.dart';
+
+enum VaultLockMode {
+  checkingPin,
+  firstSetup,
+  confirmSetup,
+  unlock,
+  verifyCurrentPin,
+  enterNewPin,
+  confirmNewPin,
+  changeSuccess,
+}
 
 /// Drives the Vault Locked screen.
-/// Handles both first-time PIN setup (enter → confirm → save → enter vault)
-/// and normal unlock (enter PIN → verify → enter vault).
+/// Handles first-time PIN setup, normal unlock, and changing PIN.
 class VaultLockController extends GetxController {
   final Rx<VaultLockMode> mode = VaultLockMode.checkingPin.obs;
   final RxString enteredPin = ''.obs;
@@ -21,7 +31,15 @@ class VaultLockController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    _determineMode();
+    VaultMediaCache.instance.clear();
+    final args = Get.arguments;
+    final isChangePin = args is Map && args['isChangePin'] == true;
+    if (isChangePin) {
+      showOnboarding.value = false;
+      mode.value = VaultLockMode.verifyCurrentPin;
+    } else {
+      _determineMode();
+    }
   }
 
   Future<void> _determineMode() async {
@@ -73,6 +91,30 @@ class VaultLockController extends GetxController {
         } else {
           _shakeError();
         }
+      case VaultLockMode.verifyCurrentPin:
+        final ok = await VaultEncryption.instance.verifyPin(enteredPin.value);
+        if (ok) {
+          enteredPin.value = '';
+          mode.value = VaultLockMode.enterNewPin;
+        } else {
+          _shakeError();
+        }
+      case VaultLockMode.enterNewPin:
+        _pendingPin = enteredPin.value;
+        enteredPin.value = '';
+        mode.value = VaultLockMode.confirmNewPin;
+      case VaultLockMode.confirmNewPin:
+        if (enteredPin.value == _pendingPin) {
+          await VaultEncryption.instance.savePin(enteredPin.value);
+          enteredPin.value = '';
+          _pendingPin = '';
+          mode.value = VaultLockMode.changeSuccess;
+        } else {
+          _shakeError();
+          _pendingPin = '';
+          mode.value = VaultLockMode.enterNewPin;
+        }
+      case VaultLockMode.changeSuccess:
       case VaultLockMode.checkingPin:
         break;
     }

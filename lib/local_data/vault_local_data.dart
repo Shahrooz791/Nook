@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
@@ -8,6 +9,7 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:get/get.dart';
 
 import 'package:nook/local_data/vault_encryption.dart';
+import 'package:nook/local_data/vault_media_cache.dart';
 import 'package:nook/model/vault_models.dart';
 
 /// Only place allowed to touch vault SQFlite tables and encrypted file storage.
@@ -117,7 +119,7 @@ class VaultLocalData {
   Future<VaultPhoto> insertPhoto(Uint8List imageBytes, {String? originalPath, String? assetId}) async {
     final encrypted = await VaultEncryption.instance.encrypt(imageBytes);
     final path = await _writeEncFile(encrypted, 'photos');
-    
+
     // Verify the encrypted file was written successfully (exists, non-zero size)
     final encFile = File(path);
     final isSaved = await encFile.exists() && (await encFile.length()) > 0;
@@ -132,40 +134,31 @@ class VaultLocalData {
     );
     final db = await _database;
     final id = await db.insert('vault_photos', photo.toMap());
-    
+
     // Gallery Deletion Logic
     if (assetId != null) {
-      try {
-        final List<String> deleted = await PhotoManager.editor.deleteWithIds([assetId]);
-        if (deleted.isEmpty) {
-          Get.snackbar(
-            'Notice',
-            'Saved to vault, but couldn\'t remove the original.',
-            snackPosition: SnackPosition.BOTTOM,
-          );
-        }
-      } catch (e) {
-        Get.snackbar(
-          'Notice',
-          'Saved to vault, but couldn\'t remove the original.',
-          snackPosition: SnackPosition.BOTTOM,
-        );
-      }
+      await _deleteGalleryAsset(assetId);
     }
-    
+
     return VaultPhoto(id: id, encryptedPath: path, originalPath: originalPath, addedAt: photo.addedAt);
   }
 
   Future<Uint8List> decryptPhoto(VaultPhoto photo) async {
+    final cached = VaultMediaCache.instance.getFullRes(photo.encryptedPath);
+    if (cached != null) return cached;
     final raw = await File(photo.encryptedPath).readAsBytes();
-    return VaultEncryption.instance.decrypt(raw);
+    final decrypted = await VaultEncryption.instance.decrypt(raw);
+    VaultMediaCache.instance.putFullRes(photo.encryptedPath, decrypted);
+    return decrypted;
   }
 
   Future<void> deletePhoto(int id) async {
     final db = await _database;
     final rows = await db.query('vault_photos', where: 'id = ?', whereArgs: [id]);
     if (rows.isNotEmpty) {
-      final f = File(rows.first['encrypted_path'] as String);
+      final path = rows.first['encrypted_path'] as String;
+      VaultMediaCache.instance.remove(path);
+      final f = File(path);
       if (await f.exists()) await f.delete();
     }
     await db.delete('vault_photos', where: 'id = ?', whereArgs: [id]);
@@ -180,14 +173,15 @@ class VaultLocalData {
   }
 
   Future<VaultVideo> insertVideo(
-    Uint8List videoBytes, {
-    String? originalPath,
-    int durationSeconds = 0,
-    String? assetId,
-  }) async {
+      Uint8List videoBytes, {
+        String? originalPath,
+        int durationSeconds = 0,
+        String? assetId,
+        Uint8List? thumbBytes,
+      }) async {
     final encrypted = await VaultEncryption.instance.encrypt(videoBytes);
     final path = await _writeEncFile(encrypted, 'videos');
-    
+
     // Verify the encrypted file was written successfully (exists, non-zero size)
     final encFile = File(path);
     final isSaved = await encFile.exists() && (await encFile.length()) > 0;
@@ -195,33 +189,29 @@ class VaultLocalData {
       throw Exception('Failed to verify encrypted file storage.');
     }
 
+    String? thumbPath;
+    if (thumbBytes != null && thumbBytes.isNotEmpty) {
+      try {
+        final encryptedThumb = await VaultEncryption.instance.encrypt(thumbBytes);
+        thumbPath = await _writeEncFile(encryptedThumb, 'video_thumbs');
+      } catch (e) {
+        debugPrint('[Nook][vault] failed to encrypt/save video thumbnail: $e');
+      }
+    }
+
     final video = VaultVideo(
       encryptedPath: path,
       originalPath: originalPath,
+      thumbEncryptedPath: thumbPath,
       durationSeconds: durationSeconds,
       addedAt: DateTime.now().toIso8601String(),
     );
     final db = await _database;
     final id = await db.insert('vault_videos', video.toMap());
-    
+
     // Gallery/File Deletion Logic
     if (assetId != null) {
-      try {
-        final List<String> deleted = await PhotoManager.editor.deleteWithIds([assetId]);
-        if (deleted.isEmpty) {
-          Get.snackbar(
-            'Notice',
-            'Saved to vault, but couldn\'t remove the original.',
-            snackPosition: SnackPosition.BOTTOM,
-          );
-        }
-      } catch (e) {
-        Get.snackbar(
-          'Notice',
-          'Saved to vault, but couldn\'t remove the original.',
-          snackPosition: SnackPosition.BOTTOM,
-        );
-      }
+      await _deleteGalleryAsset(assetId);
     } else if (originalPath != null) {
       try {
         final f = File(originalPath);
@@ -229,6 +219,7 @@ class VaultLocalData {
           await f.delete();
         }
       } catch (e) {
+        debugPrint('[Nook][vault] video original-path delete failed: $e');
         Get.snackbar(
           'Notice',
           'Saved to vault, but couldn\'t remove the original.',
@@ -241,9 +232,27 @@ class VaultLocalData {
       id: id,
       encryptedPath: path,
       originalPath: originalPath,
+      thumbEncryptedPath: thumbPath,
       durationSeconds: durationSeconds,
       addedAt: video.addedAt,
     );
+  }
+
+  Future<Uint8List?> decryptVideoThumb(VaultVideo video) async {
+    if (video.thumbEncryptedPath == null) return null;
+    final cached = VaultMediaCache.instance.getThumb(video.thumbEncryptedPath!);
+    if (cached != null) return cached;
+    try {
+      final f = File(video.thumbEncryptedPath!);
+      if (!await f.exists()) return null;
+      final raw = await f.readAsBytes();
+      final decrypted = await VaultEncryption.instance.decrypt(raw);
+      VaultMediaCache.instance.putThumb(video.thumbEncryptedPath!, decrypted);
+      return decrypted;
+    } catch (e) {
+      debugPrint('[Nook][vault] decryptVideoThumb error: $e');
+      return null;
+    }
   }
 
   Future<Uint8List> decryptVideo(VaultVideo video) async {
@@ -255,8 +264,18 @@ class VaultLocalData {
     final db = await _database;
     final rows = await db.query('vault_videos', where: 'id = ?', whereArgs: [id]);
     if (rows.isNotEmpty) {
-      final f = File(rows.first['encrypted_path'] as String);
+      final row = rows.first;
+      final encPath = row['encrypted_path'] as String;
+      VaultMediaCache.instance.remove(encPath);
+      final f = File(encPath);
       if (await f.exists()) await f.delete();
+
+      final thumbPath = row['thumb_encrypted_path'] as String?;
+      if (thumbPath != null) {
+        VaultMediaCache.instance.remove(thumbPath);
+        final tf = File(thumbPath);
+        if (await tf.exists()) await tf.delete();
+      }
     }
     await db.delete('vault_videos', where: 'id = ?', whereArgs: [id]);
   }
@@ -270,13 +289,13 @@ class VaultLocalData {
   }
 
   Future<VaultFile> insertFile(
-    Uint8List fileBytes, {
-    required String originalName,
-    String? originalPath,
-  }) async {
+      Uint8List fileBytes, {
+        required String originalName,
+        String? originalPath,
+      }) async {
     final encrypted = await VaultEncryption.instance.encrypt(fileBytes);
     final path = await _writeEncFile(encrypted, 'files');
-    
+
     // Verify the encrypted file was written successfully (exists, non-zero size)
     final encFile = File(path);
     final isSaved = await encFile.exists() && (await encFile.length()) > 0;
@@ -479,14 +498,54 @@ class VaultLocalData {
     await db.delete('vault_files');
     await db.delete('vault_notes');
     await db.delete('vault_passwords');
-    await db.update('vault_meta', {'auto_lock_seconds': 60}, where: 'id = 1');
 
     // Delete secure-storage credentials
     await VaultEncryption.instance.deleteKey();
     await VaultEncryption.instance.deletePin();
+    VaultMediaCache.instance.clear();
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────
+
+  /// Shared by insertPhoto/insertVideo. Confirms delete permission explicitly
+  /// before calling photo_manager, and prints the *real* exception to the
+  /// console (instead of swallowing it) so a failure can actually be
+  /// diagnosed from `flutter run` / Logcat output.
+  Future<void> _deleteGalleryAsset(String assetId) async {
+    try {
+      final ps = await PhotoManager.requestPermissionExtend();
+      if (!ps.isAuth && !ps.hasAccess) {
+        debugPrint('[Nook][vault] gallery delete skipped: permission not granted ($ps)');
+        Get.snackbar(
+          'Notice',
+          'Saved to vault, but couldn\'t remove the original.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+        return;
+      }
+
+      final List<String> deleted = await PhotoManager.editor.deleteWithIds([assetId]);
+      if (deleted.isEmpty) {
+        debugPrint('[Nook][vault] gallery delete returned empty result for id=$assetId');
+        Get.snackbar(
+          'Notice',
+          'Saved to vault, but couldn\'t remove the original.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+    } catch (e, st) {
+      // This is the line to watch in `flutter run` output — it will show the
+      // *actual* platform reason (permission denial, user cancellation,
+      // unsupported OS version, etc.) instead of a generic message.
+      debugPrint('[Nook][vault] gallery delete failed for id=$assetId: $e');
+      debugPrint('$st');
+      Get.snackbar(
+        'Notice',
+        'Saved to vault, but couldn\'t remove the original.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
+  }
 
   Future<String> _writeEncFile(Uint8List data, String subfolder) async {
     final appDir = await getApplicationDocumentsDirectory();

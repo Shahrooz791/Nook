@@ -5,6 +5,7 @@ import 'package:nook/core/constant/app_colors.dart';
 import 'package:nook/core/utils/size_utils.dart';
 import 'package:nook/view/widgets/app_text.dart';
 import 'package:nook/view/widgets/glass_container.dart';
+import 'package:nook/view/screens/vault/components/vault_delete_confirm_dialog.dart';
 import 'package:nook/view/screens/vault/your_vault/components/vault_category_card.dart';
 
 class YourVaultScreen extends StatelessWidget {
@@ -159,33 +160,14 @@ class YourVaultScreen extends StatelessWidget {
                   // Wipe Vault
                   GestureDetector(
                     onTap: () {
-                      Get.defaultDialog<bool>(
+                      showVaultDeleteDialog(
                         title: 'Wipe Vault?',
-                        titleStyle: const TextStyle(color: AppColors.vaultTextHi),
-                        middleText: 'This will permanently delete all encrypted photos, videos, files, notes, and passwords. This cannot be undone.',
-                        middleTextStyle: const TextStyle(color: AppColors.vaultTextLo),
-                        backgroundColor: AppColors.vaultBgB,
-                        textConfirm: 'WIPE EVERYTHING',
-                        confirmTextColor: AppColors.vaultTextHi,
-                        buttonColor: AppColors.vaultDanger,
-                        textCancel: 'Cancel',
-                        cancelTextColor: AppColors.vaultTextLo,
+                        message: 'This will permanently delete all encrypted photos, videos, files, notes, and passwords. This cannot be undone.',
                         onConfirm: () {
-                          Get.back(); // close dialog
-                          // Add an extra confirmation since this is destructive
-                          Get.defaultDialog(
+                          showVaultDeleteDialog(
                             title: 'Are you absolutely sure?',
-                            titleStyle: const TextStyle(color: AppColors.vaultDanger),
-                            middleText: 'There is no recovery after this point.',
-                            middleTextStyle: const TextStyle(color: AppColors.vaultTextLo),
-                            backgroundColor: AppColors.vaultBgB,
-                            textConfirm: 'YES, DELETE',
-                            confirmTextColor: AppColors.vaultTextHi,
-                            buttonColor: AppColors.vaultDanger,
-                            textCancel: 'Cancel',
-                            cancelTextColor: AppColors.vaultTextLo,
+                            message: 'There is no recovery after this point.',
                             onConfirm: () {
-                              Get.back();
                               controller.wipeVaultData();
                             },
                           );

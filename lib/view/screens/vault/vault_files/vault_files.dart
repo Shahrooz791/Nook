@@ -10,6 +10,7 @@ import 'package:nook/local_data/vault_local_data.dart';
 import 'package:nook/view/widgets/app_text.dart';
 import 'package:nook/view/widgets/glass_container.dart';
 import 'package:nook/view/widgets/primary_button.dart';
+import 'package:nook/view/screens/vault/components/vault_delete_confirm_dialog.dart';
 
 class VaultFilesScreen extends StatelessWidget {
   const VaultFilesScreen({super.key});
@@ -140,6 +141,9 @@ class VaultFilesScreen extends StatelessWidget {
     return Dismissible(
       key: Key(file.id.toString()),
       direction: DismissDirection.endToStart,
+      dismissThresholds: const {
+        DismissDirection.endToStart: 0.25,
+      },
       background: Container(
         alignment: Alignment.centerRight,
         padding: EdgeInsets.only(right: 20.h),
@@ -150,19 +154,9 @@ class VaultFilesScreen extends StatelessWidget {
         child: const Icon(Icons.delete_outline, color: Colors.white),
       ),
       confirmDismiss: (direction) async {
-        return await Get.defaultDialog<bool>(
+        return await showVaultDeleteDialog(
           title: 'Delete File',
-          titleStyle: const TextStyle(color: AppColors.vaultTextHi),
-          middleText: 'Are you sure you want to delete "${file.originalName}"?',
-          middleTextStyle: const TextStyle(color: AppColors.vaultTextLo),
-          backgroundColor: AppColors.vaultBgB,
-          textConfirm: 'Delete',
-          confirmTextColor: AppColors.vaultTextHi,
-          buttonColor: AppColors.vaultDanger,
-          textCancel: 'Cancel',
-          cancelTextColor: AppColors.vaultTextLo,
-          onConfirm: () => Get.back(result: true),
-          onCancel: () => Get.back(result: false),
+          message: 'Are you sure you want to delete "${file.originalName}"?',
         );
       },
       onDismissed: (direction) {

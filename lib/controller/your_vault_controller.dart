@@ -62,7 +62,7 @@ class YourVaultController extends GetxController {
 
   // ── Settings ──────────────────────────────────────────────────────────────
   void changePin() {
-    Get.offAllNamed(AppRoutes.vaultLocked);
+    Get.toNamed(AppRoutes.vaultLocked, arguments: {'isChangePin': true});
   }
 
   Future<void> wipeVaultData() async {

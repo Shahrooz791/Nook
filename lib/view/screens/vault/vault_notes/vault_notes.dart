@@ -7,6 +7,7 @@ import 'package:nook/core/utils/size_utils.dart';
 import 'package:nook/view/widgets/app_text.dart';
 import 'package:nook/view/widgets/glass_container.dart';
 import 'package:nook/view/widgets/primary_button.dart';
+import 'package:nook/view/screens/vault/components/vault_delete_confirm_dialog.dart';
 import 'package:nook/view/screens/vault/vault_notes/components/vault_note_editor.dart';
 
 class VaultNotesScreen extends StatelessWidget {
@@ -114,6 +115,9 @@ class VaultNotesScreen extends StatelessWidget {
     return Dismissible(
       key: Key(note.raw.id.toString()),
       direction: DismissDirection.endToStart,
+      dismissThresholds: const {
+        DismissDirection.endToStart: 0.25,
+      },
       background: Container(
         alignment: Alignment.centerRight,
         padding: EdgeInsets.only(right: 20.h),
@@ -124,19 +128,9 @@ class VaultNotesScreen extends StatelessWidget {
         child: const Icon(Icons.delete_outline, color: Colors.white),
       ),
       confirmDismiss: (direction) async {
-        return await Get.defaultDialog<bool>(
+        return await showVaultDeleteDialog(
           title: 'Delete Note',
-          titleStyle: const TextStyle(color: AppColors.vaultTextHi),
-          middleText: 'Are you sure you want to delete "${note.title}"?',
-          middleTextStyle: const TextStyle(color: AppColors.vaultTextLo),
-          backgroundColor: AppColors.vaultBgB,
-          textConfirm: 'Delete',
-          confirmTextColor: AppColors.vaultTextHi,
-          buttonColor: AppColors.vaultDanger,
-          textCancel: 'Cancel',
-          cancelTextColor: AppColors.vaultTextLo,
-          onConfirm: () => Get.back(result: true),
-          onCancel: () => Get.back(result: false),
+          message: 'Are you sure you want to delete "${note.title}"?',
         );
       },
       onDismissed: (direction) {

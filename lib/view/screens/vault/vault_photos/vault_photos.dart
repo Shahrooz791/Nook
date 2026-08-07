@@ -5,6 +5,7 @@ import 'package:nook/core/constant/app_colors.dart';
 import 'package:nook/core/utils/size_utils.dart';
 import 'package:nook/view/widgets/app_text.dart';
 import 'package:nook/view/widgets/primary_button.dart';
+import 'package:nook/view/screens/vault/components/vault_delete_confirm_dialog.dart';
 import 'package:nook/view/screens/vault/vault_photos/components/vault_photo_grid.dart';
 
 class VaultPhotosScreen extends StatelessWidget {
@@ -76,19 +77,10 @@ class VaultPhotosScreen extends StatelessWidget {
                         IconButton(
                           icon: const Icon(Icons.delete_outline, color: AppColors.vaultDanger),
                           onPressed: () {
-                            Get.defaultDialog(
+                            showVaultDeleteDialog(
                               title: 'Delete Photos',
-                              titleStyle: const TextStyle(color: AppColors.vaultTextHi),
-                              middleText: 'Delete selected photos permanently?',
-                              middleTextStyle: const TextStyle(color: AppColors.vaultTextLo),
-                              backgroundColor: AppColors.vaultBgB,
-                              textConfirm: 'Delete',
-                              confirmTextColor: AppColors.vaultTextHi,
-                              buttonColor: AppColors.vaultDanger,
-                              textCancel: 'Cancel',
-                              cancelTextColor: AppColors.vaultTextLo,
+                              message: 'Delete selected photos permanently?',
                               onConfirm: () async {
-                                Get.back();
                                 await controller.deleteSelected();
                               },
                             );

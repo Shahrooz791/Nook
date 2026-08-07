@@ -32,7 +32,10 @@ class VaultPhotoGrid extends StatelessWidget {
               if (controller.isMultiSelect.value) {
                 controller.toggleMultiSelect(photo.id!);
               } else {
-                Get.to(() => VaultPhotoViewer(photo: photo));
+                Get.to(() => VaultPhotoViewer(
+                      photos: controller.photos,
+                      initialIndex: index,
+                    ));
               }
             },
             onLongPress: () {
@@ -78,6 +81,7 @@ class VaultPhotoGrid extends StatelessWidget {
                         return Image.memory(
                           snapshot.data!,
                           fit: BoxFit.cover,
+                          cacheWidth: 250,
                         );
                       },
                     ),

@@ -3,10 +3,13 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
+import 'package:photo_manager/photo_manager.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
 
 import 'package:nook/core/constant/app_colors.dart';
 import 'package:nook/local_data/vault_local_data.dart';
@@ -40,6 +43,7 @@ class VaultVideosController extends GetxController {
     int durationSeconds = 0;
     File? tempFile;
     String? assetId;
+    AssetEntity? pickedAsset;
 
     if (source == 'gallery') {
       final List<AssetEntity>? picked = await AssetPicker.pickAssets(
@@ -57,12 +61,12 @@ class VaultVideosController extends GetxController {
         ),
       );
       if (picked == null || picked.isEmpty) return;
-      final asset = picked.first;
-      videoBytes = await asset.originBytes;
+      pickedAsset = picked.first;
+      videoBytes = await pickedAsset.originBytes;
       if (videoBytes == null) return;
-      tempFile = await asset.file;
-      durationSeconds = asset.duration;
-      assetId = asset.id;
+      tempFile = await pickedAsset.file;
+      durationSeconds = pickedAsset.duration;
+      assetId = pickedAsset.id;
     } else {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.video,
@@ -83,12 +87,49 @@ class VaultVideosController extends GetxController {
       }
     }
 
+    Uint8List? thumbBytes;
+    // 1. Primary path — native AssetEntity thumbnail (gallery pick)
+    if (pickedAsset != null) {
+      try {
+        thumbBytes = await pickedAsset.thumbnailDataWithSize(
+          const ThumbnailSize(320, 320),
+        );
+        if (thumbBytes != null && thumbBytes.isNotEmpty) {
+          debugPrint('[Nook][vault] AssetEntity native thumbnail extracted: ${thumbBytes.length} bytes');
+        }
+      } catch (e) {
+        debugPrint('[Nook][vault] AssetEntity thumbnail failed: $e');
+      }
+    }
+
+    // 2. Fallback path — VideoThumbnail plugin (file picker / AssetEntity fallback)
+    if (thumbBytes == null && tempFile != null && await tempFile.exists()) {
+      try {
+        thumbBytes = await VideoThumbnail.thumbnailData(
+          video: tempFile.path,
+          imageFormat: ImageFormat.JPEG,
+          maxWidth: 320,
+          quality: 70,
+        );
+        if (thumbBytes != null && thumbBytes.isNotEmpty) {
+          debugPrint('[Nook][vault] VideoThumbnail plugin fallback extracted: ${thumbBytes.length} bytes');
+        }
+      } catch (e) {
+        debugPrint('[Nook][vault] video_thumbnail fallback failed: $e');
+      }
+    }
+
+    if (thumbBytes == null || thumbBytes.isEmpty) {
+      debugPrint('[Nook][vault] no thumbnail available for this video — using fallback icon');
+    }
+
     isImporting.value = true;
     await VaultLocalData.instance.insertVideo(
       videoBytes,
       originalPath: tempFile?.path,
       durationSeconds: durationSeconds,
       assetId: assetId,
+      thumbBytes: thumbBytes,
     );
 
     await loadVideos();
@@ -102,7 +143,11 @@ class VaultVideosController extends GetxController {
     );
   }
 
-  // ── Decrypt for playback ──────────────────────────────────────────────────
+  // ── Decrypt for playback & display ────────────────────────────────────────
+
+  Future<Uint8List?> decryptVideoThumb(VaultVideo video) {
+    return VaultLocalData.instance.decryptVideoThumb(video);
+  }
 
   /// Decrypts a video to a temporary file (must be cleaned up after playback).
   Future<File> decryptVideoToTemp(VaultVideo video) async {
@@ -143,24 +188,93 @@ class VaultVideosController extends GetxController {
     await loadVideos();
   }
 
+  Future<bool> restoreVideo(VaultVideo video) async {
+    try {
+      final bytes = await VaultLocalData.instance.decryptVideo(video);
+      final filename = 'restored_video_${DateTime.now().millisecondsSinceEpoch}.mp4';
+
+      final tmpDir = await getTemporaryDirectory();
+      final tmpFile = File('${tmpDir.path}/$filename');
+      await tmpFile.writeAsBytes(bytes);
+
+      AssetEntity? savedAsset;
+      try {
+        savedAsset = await PhotoManager.editor.saveVideo(
+          tmpFile,
+          title: filename,
+          relativePath: 'Movies/NookRestored',
+        );
+      } catch (e) {
+        debugPrint('[Nook][vault] PhotoManager saveVideo error: $e');
+      } finally {
+        if (await tmpFile.exists()) await tmpFile.delete();
+      }
+
+      if (savedAsset != null) {
+        await VaultLocalData.instance.deleteVideo(video.id!);
+        await loadVideos();
+        Get.snackbar(
+          'Restored',
+          'Video saved to Gallery (Movies/NookRestored)',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: AppColors.vaultGlassFillStrong,
+          colorText: AppColors.vaultTextHi,
+        );
+        return true;
+      }
+
+      // Fallback: direct file write + MediaScanner scan
+      if (Platform.isAndroid) {
+        final restoreDir = Directory('/storage/emulated/0/Download/NookRestored');
+        if (!await restoreDir.exists()) {
+          await restoreDir.create(recursive: true);
+        }
+        final targetFile = File('${restoreDir.path}/$filename');
+        await targetFile.writeAsBytes(bytes);
+        if (await targetFile.exists() && await targetFile.length() > 0) {
+          try {
+            await const MethodChannel('nook/media_scanner').invokeMethod('scanFile', {'path': targetFile.path});
+          } catch (_) {}
+          await VaultLocalData.instance.deleteVideo(video.id!);
+          await loadVideos();
+          Get.snackbar(
+            'Restored',
+            'Video saved to Downloads/NookRestored',
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: AppColors.vaultGlassFillStrong,
+            colorText: AppColors.vaultTextHi,
+          );
+          return true;
+        }
+      }
+
+      Get.snackbar(
+        'Error',
+        'Could not restore video — please try again',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.vaultDanger.withValues(alpha: 0.8),
+        colorText: AppColors.vaultTextHi,
+      );
+      return false;
+    } catch (e) {
+      debugPrint('[Nook][vault] restoreVideo error: $e');
+      Get.snackbar(
+        'Error',
+        'Could not restore video — please try again',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.vaultDanger.withValues(alpha: 0.8),
+        colorText: AppColors.vaultTextHi,
+      );
+      return false;
+    }
+  }
+
   Future<void> restoreSelected() async {
     final toRestoreIds = List<int>.from(selectedIds);
     for (final id in toRestoreIds) {
       final video = videos.firstWhereOrNull((v) => v.id == id);
       if (video == null) continue;
-      
-      final bytes = await VaultLocalData.instance.decryptVideo(video);
-      
-      final restoreDir = Directory('/storage/emulated/0/Download/NookRestored');
-      if (!await restoreDir.exists()) {
-        await restoreDir.create(recursive: true);
-      }
-      
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final restorePath = '${restoreDir.path}/restored_video_$timestamp.mp4';
-      await File(restorePath).writeAsBytes(bytes);
-
-      await VaultLocalData.instance.deleteVideo(id);
+      await restoreVideo(video);
     }
     selectedIds.clear();
     isMultiSelect.value = false;

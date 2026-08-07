@@ -2,8 +2,37 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:encrypt/encrypt.dart' as enc;
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:pointycastle/digests/sha256.dart';
+
+class _CryptParams {
+  final Uint8List keyBytes;
+  final Uint8List data;
+  const _CryptParams(this.keyBytes, this.data);
+}
+
+Uint8List _encryptIsolate(_CryptParams params) {
+  final key = enc.Key(params.keyBytes);
+  final iv = enc.IV.fromSecureRandom(16);
+  final encrypter = enc.Encrypter(enc.AES(key, mode: enc.AESMode.cbc));
+  final encrypted = encrypter.encryptBytes(params.data, iv: iv);
+  final out = Uint8List(16 + encrypted.bytes.length);
+  out.setRange(0, 16, iv.bytes);
+  out.setRange(16, out.length, encrypted.bytes);
+  return out;
+}
+
+Uint8List _decryptIsolate(_CryptParams params) {
+  final key = enc.Key(params.keyBytes);
+  final iv = enc.IV(params.data.sublist(0, 16));
+  final encrypter = enc.Encrypter(enc.AES(key, mode: enc.AESMode.cbc));
+  final decrypted = encrypter.decryptBytes(
+    enc.Encrypted(params.data.sublist(16)),
+    iv: iv,
+  );
+  return Uint8List.fromList(decrypted);
+}
 
 /// Only place in the app that handles AES-256 encryption and PIN management.
 /// Key and PIN hash both live exclusively in [FlutterSecureStorage] —
@@ -46,25 +75,13 @@ class VaultEncryption {
   /// Encrypts [plainBytes] and returns `IV (16 bytes) || ciphertext`.
   Future<Uint8List> encrypt(Uint8List plainBytes) async {
     final key = await _key();
-    final iv = enc.IV.fromSecureRandom(16);
-    final encrypter = enc.Encrypter(enc.AES(key, mode: enc.AESMode.cbc));
-    final encrypted = encrypter.encryptBytes(plainBytes, iv: iv);
-    final out = Uint8List(16 + encrypted.bytes.length);
-    out.setRange(0, 16, iv.bytes);
-    out.setRange(16, out.length, encrypted.bytes);
-    return out;
+    return compute(_encryptIsolate, _CryptParams(key.bytes, plainBytes));
   }
 
-  /// Decrypts data produced by [encrypt].  Expects `IV || ciphertext`.
+  /// Decrypts data produced by [encrypt]. Expects `IV || ciphertext`.
   Future<Uint8List> decrypt(Uint8List combined) async {
     final key = await _key();
-    final iv = enc.IV(combined.sublist(0, 16));
-    final encrypter = enc.Encrypter(enc.AES(key, mode: enc.AESMode.cbc));
-    final decrypted = encrypter.decryptBytes(
-      enc.Encrypted(combined.sublist(16)),
-      iv: iv,
-    );
-    return Uint8List.fromList(decrypted);
+    return compute(_decryptIsolate, _CryptParams(key.bytes, combined));
   }
 
   /// Convenience: encrypt a UTF-8 string, return Base64-encoded ciphertext.

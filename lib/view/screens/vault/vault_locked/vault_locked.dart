@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
 import 'package:nook/controller/vault_lock_controller.dart';
 import 'package:nook/core/constant/app_colors.dart';
+import 'package:nook/core/utils/routes.dart';
 import 'package:nook/core/utils/size_utils.dart';
 import 'package:nook/view/widgets/app_text.dart';
 import 'package:nook/view/widgets/primary_button.dart';
@@ -24,6 +25,62 @@ class VaultLockedScreen extends StatelessWidget {
         child: SafeArea(
           child: Obx(() {
             final currentMode = controller.mode.value;
+
+            if (currentMode == VaultLockMode.checkingPin) {
+              return const Center(
+                child: CircularProgressIndicator(color: AppColors.vaultAccent),
+              );
+            }
+
+            if (currentMode == VaultLockMode.changeSuccess) {
+              return Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32.h),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(24.h),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppColors.vaultGlassFillStrong,
+                        ),
+                        child: Icon(
+                          Icons.check_circle_outline,
+                          size: 64.adaptSize,
+                          color: AppColors.vaultAccent,
+                        ),
+                      ),
+                      Gap.v(24),
+                      const AppText(
+                        'PIN Changed!',
+                        size: 24,
+                        weight: FontWeight.w700,
+                        align: TextAlign.center,
+                        color: AppColors.vaultTextHi,
+                      ),
+                      Gap.v(12),
+                      const AppText(
+                        'Your vault PIN has been updated successfully.',
+                        size: 14,
+                        align: TextAlign.center,
+                        color: AppColors.vaultTextLo,
+                        height: 1.5,
+                      ),
+                      Gap.v(40),
+                      PrimaryButton(
+                        label: 'Back to Your Vault',
+                        isVault: true,
+                        onTap: () {
+                          Get.offNamed(AppRoutes.yourVault);
+                        },
+                        width: 220.h,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
 
             // First time setup layout - showing onboarding message first
             if (controller.showOnboarding.value) {
@@ -76,7 +133,7 @@ class VaultLockedScreen extends StatelessWidget {
               );
             }
 
-            // PIN Entry UI (Setup or Unlock)
+            // PIN Entry UI (Setup, Unlock, or Change PIN)
             String headerText = 'Enter PIN';
             String subtextText = 'Enter your PIN to continue';
             if (currentMode == VaultLockMode.firstSetup) {
@@ -85,13 +142,37 @@ class VaultLockedScreen extends StatelessWidget {
             } else if (currentMode == VaultLockMode.confirmSetup) {
               headerText = 'Confirm PIN';
               subtextText = 'Re-enter your PIN to confirm';
+            } else if (currentMode == VaultLockMode.verifyCurrentPin) {
+              headerText = 'Enter Current PIN';
+              subtextText = 'Confirm your current PIN to continue';
+            } else if (currentMode == VaultLockMode.enterNewPin) {
+              headerText = 'Create New PIN';
+              subtextText = 'Choose a new 4-digit PIN';
+            } else if (currentMode == VaultLockMode.confirmNewPin) {
+              headerText = 'Confirm New PIN';
+              subtextText = 'Re-enter your new PIN to confirm';
             }
 
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
+            final isChangeFlow = currentMode == VaultLockMode.verifyCurrentPin ||
+                currentMode == VaultLockMode.enterNewPin ||
+                currentMode == VaultLockMode.confirmNewPin;
+
+            return Stack(
+              children: [
+                if (isChangeFlow)
+                  Positioned(
+                    top: 8.v,
+                    left: 8.h,
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back, color: AppColors.vaultTextHi),
+                      onPressed: () => Get.back(),
+                    ),
+                  ),
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
                   Gap.v(24),
                   // Lock Icon
                 Container(
@@ -165,9 +246,11 @@ class VaultLockedScreen extends StatelessWidget {
                   onDigitPressed: controller.onDigitPressed,
                   onBackspace: controller.onBackspace,
                 ),
+                    ],
+                  ),
+                ),
               ],
-            ),
-          );
+            );
         }),
         ),
       ),
