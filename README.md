@@ -47,4 +47,4 @@ Nothing is ever sent anywhere. What's on the device stays on the device.
 
 ## Why This App Exists
 
-Most note-taking and journaling apps don't offer any real way to keep sensitive personal content — private photos, videos, documents, or account passwords — properly hidden and secure on the same device. Nook was built specifically to fill that gap for a Gen Z audience: a normal-looking, genuinely useful notes app on the surface, with a real, properly encrypted, fully local vault underneath for anyone who wants to keep certain things just for themselves.
+Most note-taking and journaling apps don't offer any real way to keep sensitive personal content — private photos, videos, documents, or account passwords — properly hidden and secure on the same device. Nook was built specifically to fill that gap for a Gen Z audience: a normal-looking, genuinely useful notes app on the surface, with a real, properly encrypted, fully local vault underneath for anyone who wants to keep certain things just for themselves.!
